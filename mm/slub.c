@@ -1082,13 +1082,13 @@ bad:
 	return 0;
 }
 
-static noinline struct kmem_cache_node *free_debug_processing(
-	struct kmem_cache *s, struct page *page, void *object,
-	unsigned long addr, unsigned long *flags)
+static noinline int free_debug_processing(struct kmem_cache *s,
+		 struct page *page, void *object, unsigned long addr)
 {
-	struct kmem_cache_node *n = get_node(s, page_to_nid(page));
+	unsigned long flags;
+	int rc = 0;
 
-	spin_lock_irqsave(&n->list_lock, *flags);
+	local_irq_save(flags);
 	slab_lock(page);
 
 	if (!check_slab(s, page))
@@ -1126,19 +1126,15 @@ static noinline struct kmem_cache_node *free_debug_processing(
 		set_track(s, object, TRACK_FREE, addr);
 	trace(s, page, object, 0);
 	init_object(s, object, SLUB_RED_INACTIVE);
+	rc = 1;
 out:
 	slab_unlock(page);
-	/*
-	 * Keep node_lock to preserve integrity
-	 * until the object is actually freed
-	 */
-	return n;
+	local_irq_restore(flags);
+	return rc;
 
 fail:
-	slab_unlock(page);
-	spin_unlock_irqrestore(&n->list_lock, *flags);
 	slab_fix(s, "Object at 0x%p not freed", object);
-	return NULL;
+	goto out;
 }
 
 static int __init setup_slub_debug(char *str)
@@ -1231,9 +1227,8 @@ static inline void setup_object_debug(struct kmem_cache *s,
 static inline int alloc_debug_processing(struct kmem_cache *s,
 	struct page *page, void *object, unsigned long addr) { return 0; }
 
-static inline struct kmem_cache_node *free_debug_processing(
-	struct kmem_cache *s, struct page *page, void *object,
-	unsigned long addr, unsigned long *flags) { return NULL; }
+static inline int free_debug_processing(struct kmem_cache *s,
+	struct page *page, void *object, unsigned long addr) { return 0; }
 
 static inline int slab_pad_check(struct kmem_cache *s, struct page *page)
 			{ return 1; }
@@ -1495,12 +1490,12 @@ static inline void remove_partial(struct kmem_cache_node *n,
 }
 
 /*
- * Lock slab, remove from the partial list and put the object into the
- * per cpu freelist.
+ * Remove slab from the partial list, freeze it and
+ * return the pointer to the freelist.
  *
  * Returns a list of objects or NULL if it fails.
  *
- * Must hold list_lock.
+ * Must hold list_lock since we modify the partial list.
  */
 static inline void *acquire_slab(struct kmem_cache *s,
 		struct kmem_cache_node *n, struct page *page,
@@ -1515,26 +1510,24 @@ static inline void *acquire_slab(struct kmem_cache *s,
 	 * The old freelist is the list of objects for the
 	 * per cpu allocation list.
 	 */
-	do {
-		freelist = page->freelist;
-		counters = page->counters;
-		new.counters = counters;
-		if (mode) {
-			new.inuse = page->objects;
-			new.freelist = NULL;
-		} else {
-			new.freelist = freelist;
-		}
+	freelist = page->freelist;
+	counters = page->counters;
+	new.counters = counters;
+	if (mode)
+		new.inuse = page->objects;
 
-		VM_BUG_ON(new.frozen);
-		new.frozen = 1;
+	VM_BUG_ON(new.frozen);
+	new.frozen = 1;
 
-	} while (!__cmpxchg_double_slab(s, page,
+	if (!__cmpxchg_double_slab(s, page,
 			freelist, counters,
-			new.freelist, new.counters,
-			"lock and freeze"));
+			NULL, new.counters,
+			"acquire_slab"))
+
+		return NULL;
 
 	remove_partial(n, page);
+	WARN_ON(!freelist);
 	return freelist;
 }
 
@@ -2326,18 +2319,13 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 		return NULL;
 
 redo:
+
 	/*
 	 * Must read kmem_cache cpu data via this cpu ptr. Preemption is
 	 * enabled. We may switch back and forth between cpus while
 	 * reading from one cpu area. That does not matter as long
 	 * as we end up on the original cpu again when doing the cmpxchg.
-	 *
-	 * Preemption is disabled for the retrieval of the tid because that
-	 * must occur from the current processor. We cannot allow rescheduling
-	 * on a different processor between the determination of the pointer
-	 * and the retrieval of the tid.
 	 */
-	preempt_disable();
 	c = __this_cpu_ptr(s->cpu_slab);
 
 	/*
@@ -2347,7 +2335,7 @@ redo:
 	 * linked list in between.
 	 */
 	tid = c->tid;
-	preempt_enable();
+	barrier();
 
 	object = c->freelist;
 	if (unlikely(!object || !node_match(c, node)))
@@ -2466,8 +2454,7 @@ static void __slab_free(struct kmem_cache *s, struct page *page,
 
 	stat(s, FREE_SLOWPATH);
 
-	if (kmem_cache_debug(s) &&
-		!(n = free_debug_processing(s, page, x, addr, &flags)))
+	if (kmem_cache_debug(s) && !free_debug_processing(s, page, x, addr))
 		return;
 
 	do {
@@ -2594,11 +2581,10 @@ redo:
 	 * data is retrieved via this pointer. If we are on the same cpu
 	 * during the cmpxchg then the free will succedd.
 	 */
-	preempt_disable();
 	c = __this_cpu_ptr(s->cpu_slab);
 
 	tid = c->tid;
-	preempt_enable();
+	barrier();
 
 	if (likely(page == c->page)) {
 		set_freepointer(s, object, c->freelist);
@@ -4010,7 +3996,7 @@ EXPORT_SYMBOL(kmem_cache_create);
  * Use the cpu notifier to insure that the cpu slabs are flushed when
  * necessary.
  */
-static int __cpuinit slab_cpuup_callback(struct notifier_block *nfb,
+static int slab_cpuup_callback(struct notifier_block *nfb,
 		unsigned long action, void *hcpu)
 {
 	long cpu = (long)hcpu;
@@ -4036,7 +4022,7 @@ static int __cpuinit slab_cpuup_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata slab_notifier = {
+static struct notifier_block slab_notifier = {
 	.notifier_call = slab_cpuup_callback
 };
 
