@@ -87,6 +87,7 @@
  */
 
 #include	<linux/slab.h>
+#include	"slab.h"
 #include	<linux/mm.h>
 #include	<linux/poison.h>
 #include	<linux/swap.h>
@@ -2172,7 +2173,7 @@ static int __init_refok setup_cpu_cache(struct kmem_cache *cachep, gfp_t gfp)
 		else
 			slab_state = PARTIAL_ARRAYCACHE;
 		} else {
-		cachep->array[smp_processor_id()] =
+			cachep->array[smp_processor_id()] =
 			kmalloc(sizeof(struct arraycache_init), gfp);
 
 		if (slab_state == PARTIAL_ARRAYCACHE) {
