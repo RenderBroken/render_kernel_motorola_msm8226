@@ -11,9 +11,9 @@ obj-y += io.o dma.o memory.o
 ifndef CONFIG_ARM_ARCH_TIMER
 obj-y += timer.o
 endif
-obj-y += clock.o clock-voter.o clock-dummy.o clock-generic.o
-obj-y += modem_notifier.o
-obj-$(CONFIG_USE_OF) += board-dt.o
+obj-y += clock.o clock-voter.o clock-dummy.o
+obj-y += modem_notifier.o subsystem_map.o
+obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o cpufreq-cap.o
 obj-$(CONFIG_DEBUG_FS) += nohlt.o clock-debug.o
 obj-$(CONFIG_KEXEC) += msm_kexec.o
 
