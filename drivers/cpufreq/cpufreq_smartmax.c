@@ -113,8 +113,8 @@ extern int tegra_input_boost (struct cpufreq_policy *policy,
 #define DEFAULT_DOWN_RATE 60000
 #define DEFAULT_SAMPLING_RATE 30000
 #define DEFAULT_INPUT_BOOST_DURATION 150000
-#define DEFAULT_TOUCH_POKE_FREQ 1350000
-#define DEFAULT_BOOST_FREQ 1350000
+#define DEFAULT_TOUCH_POKE_FREQ 1134000
+#define DEFAULT_BOOST_FREQ 1134000
 #define DEFAULT_IO_IS_BUSY 0
 #define DEFAULT_IGNORE_NICE 1
 #endif
@@ -1343,9 +1343,6 @@ static int cpufreq_governor_smartmax(struct cpufreq_policy *new_policy,
 				}
 
 				pr_info("[smartmax]:" "%s input boost task created\n", __func__);
-
-#endif
-
 				sched_setscheduler_nocheck(boost_task, SCHED_FIFO, &param);
 				get_task_struct(boost_task);
 				boost_task_alive = true;
