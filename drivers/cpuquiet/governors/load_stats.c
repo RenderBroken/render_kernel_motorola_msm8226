@@ -46,21 +46,21 @@ static unsigned int start_delay = 20000;
 static LOAD_STATS_STATE load_stats_state;
 static struct workqueue_struct *load_stats_wq;
 
-static unsigned int load_threshold[8] = {90, 80, 80, 70, 70, 60, 60, 50};
+static unsigned int load_threshold[8] = {90, 80, 70, 60, 50, 40, 30, 20};
 static unsigned int twts_threshold[8] = {70, 0, 70, 120, 70, 120, 0, 120};
 
 extern unsigned int get_rq_info(void);
 
 static u64 input_boost_end_time = 0;
 static bool input_boost_running = false;
-static unsigned int input_boost_duration = 3 * 70; /* ms */
+static unsigned int input_boost_duration = 6 * 70; /* ms */
 static unsigned int input_boost_cpus = 2;
 static unsigned int input_boost_enabled = true;
 static bool input_boost_task_alive = false;
 static struct task_struct *input_boost_task;
 
-static unsigned int rq_depth_threshold = 40;
-static unsigned int rq_depth_load_threshold = 70;
+static unsigned int rq_depth_threshold = 30;
+static unsigned int rq_depth_load_threshold = 40;
 static unsigned int rq_depth_cpus_threshold = 4;
 
 static bool first_call = true;
