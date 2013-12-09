@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/cpufreq.h>
 #include <linux/lcd_notify.h>
+#include <linux/input.h>
 
 #include <mach/cpufreq.h>
 
@@ -136,19 +137,15 @@ static struct load_thresh_tbl load[] = {
 
 static void apply_down_lock(void)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	atomic_set(&hp->down_lock, 1);
-	mod_timer(&hp->lock_timer,
-		  jiffies + msecs_to_jiffies(hp->down_lock_dur));
+	atomic_set(&hotplug.down_lock, 1);
+	mod_timer(&hotplug.lock_timer,
+		  jiffies + msecs_to_jiffies(hotplug.down_lock_dur));
 }
 EXPORT_SYMBOL_GPL(apply_down_lock);
 
 static void handle_lock_timer(unsigned long data)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	atomic_set(&hp->down_lock, 0);
+	atomic_set(&hotplug.down_lock, 0);
 }
 EXPORT_SYMBOL_GPL(handle_lock_timer);
 
@@ -156,9 +153,8 @@ static void __ref cpu_up_work(struct work_struct *work)
 {
 	int cpu;
 	int target;
-	struct cpu_hotplug *hp = &hotplug;
 
-	target = atomic_read(&hp->target_cpus);
+	target = atomic_read(&hotplug.target_cpus);
 
 	for_each_cpu_not(cpu, cpu_online_mask) {
 		if (target == num_online_cpus())
@@ -174,13 +170,12 @@ static void cpu_down_work(struct work_struct *work)
 {
 	int cpu;
 	int lock, target;
-	struct cpu_hotplug *hp = &hotplug;
 
-	lock = atomic_read(&hp->down_lock);
+	lock = atomic_read(&hotplug.down_lock);
 	if (lock)
 		return;
 
-	target = atomic_read(&hp->target_cpus);
+	target = atomic_read(&hotplug.target_cpus);
 
 	for_each_online_cpu(cpu) {
 		if (cpu == 0)
@@ -194,31 +189,27 @@ EXPORT_SYMBOL_GPL(cpu_down_work);
 
 static void online_cpu(unsigned int target)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	atomic_set(&hp->target_cpus, target);
+	atomic_set(&hotplug.target_cpus, target);
 	apply_down_lock();
-	queue_work_on(0, hotplug_wq, &hp->up_work);
+	queue_work_on(0, hotplug_wq, &hotplug.up_work);
 }
 EXPORT_SYMBOL_GPL(online_cpu);
 
 static void offline_cpu(unsigned int target)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	atomic_set(&hp->target_cpus, target);
-	queue_work_on(0, hotplug_wq, &hp->down_work);
+	atomic_set(&hotplug.target_cpus, target);
+	queue_work_on(0, hotplug_wq, &hotplug.down_work);
 }
 EXPORT_SYMBOL_GPL(offline_cpu);
 
-static int reschedule_hotplug_fn(struct cpu_stats *st)
+static int reschedule_hotplug_work(void)
 {
 	return queue_delayed_work_on(0, hotplug_wq, &hotplug_work,
-				     st->update_rate);
+				     stats.update_rate);
 }
-EXPORT_SYMBOL_GPL(reschedule_hotplug_fn);
+EXPORT_SYMBOL_GPL(reschedule_hotplug_work);
 
-static void msm_hotplug_fn(struct work_struct *work)
+static void msm_hotplug_work(struct work_struct *work)
 {
 	unsigned int cur_load, online_cpus, target = 0;
 	unsigned int i;
@@ -263,43 +254,40 @@ static void msm_hotplug_fn(struct work_struct *work)
 		cur_load, online_cpus, target);
 
 reschedule:
-	reschedule_hotplug_fn(st);
+	reschedule_hotplug_work();
 }
-EXPORT_SYMBOL_GPL(msm_hotplug_fn);
+EXPORT_SYMBOL_GPL(msm_hotplug_work);
 
 static void msm_hotplug_suspend(struct work_struct *work)
 {
 	unsigned int cpu = 0;
-	struct cpu_hotplug *hp = &hotplug;
-	struct cpu_stats *st = &stats;
 
-	hp->screen_on = 0;
+	hotplug.screen_on = 0;
 
 	flush_workqueue(hotplug_wq);
 	cancel_delayed_work_sync(&hotplug_work);
 
-	atomic_set(&hp->down_lock, 0);
-	offline_cpu(st->min_cpus);
+	atomic_set(&hotplug.down_lock, 0);
+	offline_cpu(stats.min_cpus);
 
-	msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT, hp->suspend_freq);
+	msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT,
+				    hotplug.suspend_freq);
 	pr_info("%s: Suspend - max freq: %dMHz\n", MSM_HOTPLUG,
-		hp->suspend_freq / 1000);
+		hotplug.suspend_freq / 1000);
 }
 EXPORT_SYMBOL_GPL(msm_hotplug_suspend);
 
 static void msm_hotplug_resume(struct work_struct *work)
 {
 	unsigned int cpu = 0;
-	struct cpu_hotplug *hp = &hotplug;
-	struct cpu_stats *st = &stats;
 	struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
 
 	if (!policy)
 		return;
 
-	hp->screen_on = 1;
+	hotplug.screen_on = 1;
 
-	online_cpu(st->total_cpus);
+	online_cpu(stats.total_cpus);
 	for_each_possible_cpu(cpu)
 	    msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT,
 					MSM_CPUFREQ_NO_LIMIT);
@@ -307,21 +295,19 @@ static void msm_hotplug_resume(struct work_struct *work)
 	pr_info("%s: Resume - restore max frequency: %dMHz\n",
 		MSM_HOTPLUG, policy->max / 1000);
 
-	reschedule_hotplug_fn(st);
+	reschedule_hotplug_work();
 }
 EXPORT_SYMBOL_GPL(msm_hotplug_resume);
 
 static int lcd_notifier_callback(struct notifier_block *nb,
 				 unsigned long event, void *data)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
 	switch (event) {
 	case LCD_EVENT_ON_START:
-		schedule_work(&hp->resume_work);
+		schedule_work(&hotplug.resume_work);
 		break;
 	case LCD_EVENT_OFF_END:
-		schedule_work(&hp->suspend_work);
+		schedule_work(&hotplug.suspend_work);
 		break;
 	default:
 		break;
@@ -330,15 +316,79 @@ static int lcd_notifier_callback(struct notifier_block *nb,
 	return 0;
 }
 
+static void hotplug_input_event(struct input_handle *handle, unsigned int type,
+				unsigned int code, int value)
+{
+	if (num_online_cpus() >= hotplug.cpus_boosted)
+		return;
+
+	dprintk("%s: online_cpus: %u boosted\n", MSM_HOTPLUG,
+		stats.online_cpus);
+
+	online_cpu(hotplug.cpus_boosted);
+}
+EXPORT_SYMBOL_GPL(hotplug_input_event);
+
+static int hotplug_input_connect(struct input_handler *handler,
+				 struct input_dev *dev,
+				 const struct input_device_id *id)
+{
+	struct input_handle *handle;
+	int err;
+
+	handle = kzalloc(sizeof(struct input_handle), GFP_KERNEL);
+	if (!handle)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = "msm-hotplug";
+
+	err = input_register_handle(handle);
+	if (err)
+		goto err_register;
+
+	err = input_open_device(handle);
+	if (err)
+		goto err_open;
+
+	return 0;
+err_register:
+	input_unregister_handle(handle);
+err_open:
+	kfree(handle);
+	return err;
+}
+EXPORT_SYMBOL_GPL(hotplug_input_connect);
+
+static void hotplug_input_disconnect(struct input_handle *handle)
+{
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
+}
+EXPORT_SYMBOL_GPL(hotplug_input_disconnect);
+
+static const struct input_device_id hotplug_ids[] = {
+	{ .driver_info = 1 },
+	{ },
+};
+
+static struct input_handler hotplug_input_handler = {
+	.event		= hotplug_input_event,
+	.connect	= hotplug_input_connect,
+	.disconnect	= hotplug_input_disconnect,
+	.name		= MSM_HOTPLUG,
+	.id_table	= hotplug_ids,
+};
+
 /************************** sysfs interface ************************/
 
 static ssize_t show_suspend_freq(struct device *dev,
 				 struct device_attribute *msm_hotplug_attrs,
 				 char *buf)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	return sprintf(buf, "%u\n", hp->suspend_freq);
+	return sprintf(buf, "%u\n", hotplug.suspend_freq);
 }
 
 static ssize_t store_suspend_freq(struct device *dev,
@@ -347,7 +397,6 @@ static ssize_t store_suspend_freq(struct device *dev,
 {
 	unsigned int ret;
 	unsigned int val = 0, cpu = 0;
-	struct cpu_hotplug *hp = &hotplug;
 	struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
 
 	if (!policy)
@@ -357,7 +406,7 @@ static ssize_t store_suspend_freq(struct device *dev,
 	if (ret != 1 || val < policy->min || val > policy->max)
 		return -EINVAL;
 
-	hp->suspend_freq = val;
+	hotplug.suspend_freq = val;
 
 	return ret;
 }
@@ -366,9 +415,7 @@ static ssize_t show_down_lock_duration(struct device *dev,
 				       struct device_attribute
 				       *msm_hotplug_attrs, char *buf)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	return sprintf(buf, "%u\n", hp->down_lock_dur);
+	return sprintf(buf, "%u\n", hotplug.down_lock_dur);
 }
 
 static ssize_t store_down_lock_duration(struct device *dev,
@@ -378,13 +425,12 @@ static ssize_t store_down_lock_duration(struct device *dev,
 {
 	int ret;
 	unsigned int val;
-	struct cpu_hotplug *hp = &hotplug;
 
 	ret = sscanf(buf, "%u", &val);
 	if (ret != 1)
 		return -EINVAL;
 
-	hp->suspend_freq = val;
+	hotplug.suspend_freq = val;
 
 	return ret;
 }
@@ -393,9 +439,7 @@ static ssize_t show_update_rate(struct device *dev,
 				struct device_attribute *msm_hotplug_attrs,
 				char *buf)
 {
-	struct cpu_stats *st = &stats;
-
-	return sprintf(buf, "%u\n", st->update_rate);
+	return sprintf(buf, "%u\n", stats.update_rate);
 }
 
 static ssize_t store_update_rate(struct device *dev,
@@ -404,13 +448,12 @@ static ssize_t store_update_rate(struct device *dev,
 {
 	int ret;
 	unsigned int val;
-	struct cpu_stats *st = &stats;
 
 	ret = sscanf(buf, "%u", &val);
 	if (ret != 1)
 		return -EINVAL;
 
-	st->update_rate = val;
+	stats.update_rate = val;
 
 	return ret;
 }
@@ -427,8 +470,7 @@ static ssize_t show_load_levels(struct device *dev,
 	for (i = 0; i < NUM_LOAD_LEVELS; i++) {
 		len += sprintf(buf + len, "%u ", i);
 		len += sprintf(buf + len, "%u ", load[i].up_threshold);
-		len += sprintf(buf + len, "%u", load[i].down_threshold);
-		len += sprintf(buf + len, "\n");
+		len += sprintf(buf + len, "%u\n", load[i].down_threshold);
 	}
 
 	return len;
@@ -455,9 +497,7 @@ static ssize_t show_history_size(struct device *dev,
 				 struct device_attribute *msm_hotplug_attrs,
 				 char *buf)
 {
-	struct cpu_stats *st = &stats;
-
-	return sprintf(buf, "%u\n", st->hist_size);
+	return sprintf(buf, "%u\n", stats.hist_size);
 }
 
 static ssize_t store_history_size(struct device *dev,
@@ -484,7 +524,7 @@ static ssize_t store_history_size(struct device *dev,
 		return -ENOMEM;
 
 	if (!hp->screen_on)
-		reschedule_hotplug_fn(st);
+		reschedule_hotplug_work();
 
 	return ret;
 }
@@ -493,9 +533,7 @@ static ssize_t show_min_cpus_online(struct device *dev,
 				    struct device_attribute *msm_hotplug_attrs,
 				    char *buf)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	return sprintf(buf, "%u\n", hp->min_cpus_online);
+	return sprintf(buf, "%u\n", hotplug.min_cpus_online);
 }
 
 static ssize_t store_min_cpus_online(struct device *dev,
@@ -523,9 +561,7 @@ static ssize_t show_max_cpus_online(struct device *dev,
 				    struct device_attribute *msm_hotplug_attrs,
 				    char *buf)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	return sprintf(buf, "%u\n", hp->max_cpus_online);
+	return sprintf(buf, "%u\n",hotplug.max_cpus_online);
 }
 
 static ssize_t store_max_cpus_online(struct device *dev,
@@ -553,9 +589,7 @@ static ssize_t show_cpus_boosted(struct device *dev,
 				 struct device_attribute *msm_hotplug_attrs,
 				 char *buf)
 {
-	struct cpu_hotplug *hp = &hotplug;
-
-	return sprintf(buf, "%u\n", hp->cpus_boosted);
+	return sprintf(buf, "%u\n", hotplug.cpus_boosted);
 }
 
 static ssize_t store_cpus_boosted(struct device *dev,
@@ -564,13 +598,12 @@ static ssize_t store_cpus_boosted(struct device *dev,
 {
 	int ret;
 	unsigned int val;
-	struct cpu_hotplug *hp = &hotplug;
 
 	ret = sscanf(buf, "%u", &val);
 	if (ret != 1)
 		return -EINVAL;
 
-	hp->cpus_boosted = val;
+	hotplug.cpus_boosted = val;
 
 	return ret;
 }
@@ -580,13 +613,11 @@ static ssize_t show_current_load(struct device *dev,
 				 char *buf)
 {
 	unsigned int load;
-	struct cpu_stats *st = &stats;
-	struct cpu_hotplug *hp = &hotplug;
 
-	if (hp->screen_on)
+	if (hotplug.screen_on)
 		load = 0;
 	else
-		load = st->current_load;
+		load = stats.current_load;
 
 	return sprintf(buf, "%u\n", load);
 }
@@ -629,13 +660,13 @@ static int __init msm_hotplug_init(void)
 	struct cpu_stats *st = &stats;
 	struct cpu_hotplug *hp = &hotplug;
 
-	hotplug_wq = alloc_workqueue("msm_hotplug_wq", 0, 0);
+	hotplug_wq = alloc_workqueue("msm_hotplug_wq", WQ_HIGHPRI, 0);
 	if (!hotplug_wq) {
 		pr_err("%s: Creation of hotplug work failed\n", MSM_HOTPLUG);
 		return -ENOMEM;
 	}
 
-	INIT_DELAYED_WORK(&hotplug_work, msm_hotplug_fn);
+	INIT_DELAYED_WORK(&hotplug_work, msm_hotplug_work);
 	INIT_WORK(&hp->up_work, cpu_up_work);
 	INIT_WORK(&hp->down_work, cpu_down_work);
 	INIT_WORK(&hp->suspend_work, msm_hotplug_suspend);
@@ -664,7 +695,6 @@ static int __init msm_hotplug_device_init(void)
 {
 	int ret;
 	struct kobject *module_kobj;
-	struct cpu_hotplug *hp = &hotplug;
 
 	ret = platform_device_register(&msm_hotplug_device);
 	if (ret) {
@@ -682,9 +712,14 @@ static int __init msm_hotplug_device_init(void)
 	if (ret)
 		return pr_err("%s: Creation of sysfs: %d\n", MSM_HOTPLUG, ret);
 
-	hp->notif.notifier_call = lcd_notifier_callback;
-	if (lcd_register_client(&hp->notif) != 0)
+	hotplug.notif.notifier_call = lcd_notifier_callback;
+	if (lcd_register_client(&hotplug.notif) != 0)
 		pr_err("%s: LCD notifier callback failed\n", __func__);
+
+	ret = input_register_handler(&hotplug_input_handler);
+	if (ret)
+		return pr_err("%s: Faileds to register input handler: %d\n",
+			      MSM_HOTPLUG, ret);
 
 	pr_info("%s: Device init\n", MSM_HOTPLUG);
 
@@ -694,11 +729,10 @@ EXPORT_SYMBOL_GPL(msm_hotplug_device_init);
 
 static void __exit msm_hotplug_device_exit(void)
 {
-	struct cpu_hotplug *hp = &hotplug;
-	struct cpu_stats *st = &stats;
-
-	del_timer(&hp->lock_timer);
-	kfree(st->load_hist);
+	destroy_workqueue(hotplug_wq);
+	input_unregister_handler(&hotplug_input_handler);
+	del_timer(&hotplug.lock_timer);
+	kfree(stats.load_hist);
 }
 EXPORT_SYMBOL_GPL(msm_hotplug_device_exit);
 
