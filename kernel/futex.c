@@ -2022,7 +2022,7 @@ static int futex_wait(u32 __user *uaddr, unsigned int flags, u32 val,
 				      HRTIMER_MODE_ABS);
 		hrtimer_init_sleeper(to, current);
 		hrtimer_set_expires_range_ns(&to->timer, *abs_time,
-				     task_get_effective_timer_slack(current));
+					     current->timer_slack_ns);
 	}
 
 retry:
@@ -2416,7 +2416,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 				      HRTIMER_MODE_ABS);
 		hrtimer_init_sleeper(to, current);
 		hrtimer_set_expires_range_ns(&to->timer, *abs_time,
-				     task_get_effective_timer_slack(current));
+					     current->timer_slack_ns);
 	}
 
 	/*
@@ -2853,7 +2853,7 @@ static int __init futex_init(void)
 	futex_queues = alloc_large_system_hash("futex", sizeof(*futex_queues),
 					       futex_hashsize, 0,
 					       futex_hashsize < 256 ? HASH_SMALL : 0,
-					       NULL, futex_hashsize, futex_hashsize);
+					       NULL, NULL, futex_hashsize);
 
 	/*
 	 * This will fail and we want it. Some arch implementations do
