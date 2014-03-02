@@ -87,7 +87,7 @@
 
 			qcom,gpu-pwrlevel@4 {
 				reg = <4>;
-				qcom,gpu-freq = <200000000>;
+				qcom,gpu-freq = <220000000>;
 				qcom,bus-freq = <1>;
 				qcom,io-fraction = <100>;
 			};
@@ -135,7 +135,7 @@
 			qcom,energy-leakage-coeff-d = <0>;
 
 			qcom,power-current-temp = <25>;
-			qcom,power-num-freq = <5>;
+			qcom,power-num-freq = <6>;
 
 			qcom,dcvs-freq@0 {
 				reg = <0>;
