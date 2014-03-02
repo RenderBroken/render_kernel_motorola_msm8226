@@ -164,8 +164,14 @@ static struct acpuclk_drv_data drv_data = {
 		.update_mask = RCG_CONFIG_UPDATE_BIT,
 		.poll_mask = RCG_CONFIG_UPDATE_BIT,
 	},
+#ifdef CONFIG_CPU_UNDERCLOCK
+	.power_collapse_khz = 192000,
+	.wait_for_irq_khz = 192000,
+#else
 	.power_collapse_khz = 300000,
 	.wait_for_irq_khz = 300000,
+#endif
+
 };
 
 static int __init acpuclk_a7_probe(struct platform_device *pdev)
