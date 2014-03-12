@@ -357,12 +357,18 @@ CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 CFLAGS_MODULE   = -DMODULE -fno-pic -mcpu=cortex-a7 -mtune=cortex-a7 \
-		  -mfpu=neon-vfpv4 -funsafe-math-optimizations
-AFLAGS_MODULE   =
+		  -mfpu=neon-vfpv4 -funsafe-math-optimizations \
+		  -ffast-math -fsingle-precision-constant \
+                  -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr \
+		  -munaligned-access
+AFLAGS_MODULE   = -ffast-math
 LDFLAGS_MODULE  =
 CFLAGS_KERNEL	= -mcpu=cortex-a7 -mtune=cortex-a7 \
-		  -mfpu=neon-vfpv4 -funsafe-math-optimizations
-AFLAGS_KERNEL	=
+		  -mfpu=neon-vfpv4 -funsafe-math-optimizations \
+		  -ffast-math -fsingle-precision-constant \
+                  -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr \
+		  -munaligned-access
+AFLAGS_KERNEL	= -ffast-math
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -381,8 +387,11 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
 		   -mcpu=cortex-a7 -mtune=cortex-a7 \
-		   -mfpu=neon-vfpv4 -funsafe-math-optimizations
-KBUILD_AFLAGS_KERNEL :=
+		   -mfpu=neon-vfpv4 -funsafe-math-optimizations \
+		   -ffast-math -fsingle-precision-constant \
+                   -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr \
+		   -munaligned-access
+KBUILD_AFLAGS_KERNEL := -ffast-math
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 KBUILD_AFLAGS_MODULE  := -DMODULE
@@ -577,6 +586,7 @@ else
 KBUILD_CFLAGS	+= -O3 
 KBUILD_CFLAGS	+= $(call cc-disable-warning,maybe-uninitialized,)
 KBUILD_CFLAGS   += $(call cc-disable-warning,array-bounds)
+KBUILD_CFLAGS   += -fmodulo-sched -fmodulo-sched-allow-regmoves -fno-tree-vectorize
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
