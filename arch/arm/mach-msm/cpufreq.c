@@ -35,7 +35,7 @@
 
 #include "acpuclock.h"
 
-uint32_t maxscroff_freq = 998400;
+uint32_t maxscroff_freq = 600000;
 uint32_t maxscroff = 1;
 
 #ifdef CONFIG_DEBUG_FS

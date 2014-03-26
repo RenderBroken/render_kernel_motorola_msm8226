@@ -13,71 +13,54 @@
  *
  */
 
+#include <linux/powersuspend.h>
 #include <linux/workqueue.h>
 #include <linux/cpu.h>
 #include <linux/module.h>
 #include <linux/cpufreq.h>
 #include <mach/cpufreq.h>
-#include <linux/lcd_notify.h>
 
-#define MSM_SLEEPER_MAJOR_VERSION	3
-#define MSM_SLEEPER_MINOR_VERSION	0
+#define MSM_SLEEPER_MAJOR_VERSION	1
+#define MSM_SLEEPER_MINOR_VERSION	1
 
 extern uint32_t maxscroff;
 extern uint32_t maxscroff_freq;
-static int limit_set = 0;
 
-struct notifier_block notif;
-
-static void msm_sleeper_suspend(void)
+#ifdef CONFIG_HAS_POWERSUSPEND
+static void msm_sleeper_power_suspend(struct power_suspend *h)
 {
 	int cpu;
 
-	for_each_possible_cpu(cpu) {
-		msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT, maxscroff_freq);
-		pr_info("Limit max frequency to: %d\n", maxscroff_freq);
+	if (maxscroff) {
+		for_each_possible_cpu(cpu) {
+			msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT, maxscroff_freq);
+			pr_info("msm-sleeper: limit max frequency to: %d\n", maxscroff_freq);
+		}
+		limit_set = 1;
 	}
-	limit_set = 1;
-
 	return; 
 }
 
-static void msm_sleeper_resume(void)
+static void msm_sleeper_power_resume(struct power_suspend *h)
 {
 	int cpu;
+
+	if (!limit_set)
+		return;
 
 	for_each_possible_cpu(cpu) {
 		msm_cpufreq_set_freq_limits(cpu, MSM_CPUFREQ_NO_LIMIT, MSM_CPUFREQ_NO_LIMIT);
-		pr_info("Restore max frequency to %d\n", MSM_CPUFREQ_NO_LIMIT);
+		pr_info("msm-sleeper: restore max frequency.\n");
 	}
 	limit_set = 0;
-
 	return; 
 }
 
-static int lcd_notifier_callback(struct notifier_block *this,
-				unsigned long event, void *data)
-{
-	switch (event) {
-	case LCD_EVENT_ON_START:
-		if (limit_set)
-			msm_sleeper_resume();
-		break;
-	case LCD_EVENT_ON_END:
-		break;
-	case LCD_EVENT_OFF_START:
-		if (maxscroff)
-			msm_sleeper_suspend();
-		break;
-	case LCD_EVENT_OFF_END:
-		break;
-	default:
-		break;
-	}
-
-	return 0;
-}
-
+static struct power_suspend msm_sleeper_power_suspend_driver = {
+	.suspend = msm_sleeper_power_suspend,
+	.resume = msm_sleeper_power_resume,
+};
+#endif
 
 static int __init msm_sleeper_init(void)
 {
@@ -85,16 +68,14 @@ static int __init msm_sleeper_init(void)
 		 MSM_SLEEPER_MAJOR_VERSION,
 		 MSM_SLEEPER_MINOR_VERSION);
 
-	notif.notifier_call = lcd_notifier_callback;
-
-	if (lcd_register_client(&notif))
-		printk("[msm-sleeper] error\n");
-
+#ifdef CONFIG_HAS_POWERSUSPEND
+	register_power_suspend(&msm_sleeper_power_suspend_driver);
+#endif
 	return 0;
 }
 
-MODULE_AUTHOR("flar2 <asegaert@gmail.com>");
+MODULE_AUTHOR("flar2 <asegaert at gmail.com>");
 MODULE_DESCRIPTION("'msm-sleeper' - Limit max frequency while screen is off");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
 
 late_initcall(msm_sleeper_init);
