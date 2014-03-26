@@ -61,7 +61,7 @@
 #ifdef CONFIG_LCD_KCAL
 #include <mach/kcal.h>
 #include <linux/module.h>
-#include "../../../../drivers/video/msm/mdss/mdss_fb.h"
+#include "../../../drivers/video/msm/mdss/mdss_fb.h"
 extern int update_preset_lcdc_lut(void);
 #endif
 
