@@ -60,7 +60,7 @@ static struct msm_bus_scale_pdata bus_client_pdata = {
 };
 
 static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p1[] = {
-#ifdef CPU_UNDERCLOCK
+#ifdef CONFIG_CPU_UNDERCLOCK
 	{ 1,   96000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  192000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  249600, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
@@ -76,7 +76,7 @@ static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p1[] = {
 };
 
 static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p2[] = {
-#ifdef CPU_UNDERCLOCK
+#ifdef CONFIG_CPU_UNDERCLOCK
 	{ 1,   96000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  192000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  249600, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
@@ -92,7 +92,7 @@ static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p2[] = {
 };
 
 static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p4[] = {
-#ifdef CPU_UNDERCLOCK
+#ifdef CONFIG_CPU_UNDERCLOCK
 	{ 1,   96000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  192000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  249600, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
@@ -111,7 +111,7 @@ static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p4[] = {
 };
 
 static struct clkctl_acpu_speed acpu_freq_tbl_8226_1p6[] = {
-#ifdef CPU_UNDERCLOCK
+#ifdef CONFIG_CPU_UNDERCLOCK
 	{ 1,   96000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  192000, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
 	{ 1,  249600, ACPUPLL, 5, 2,   CPR_CORNER_2,    0, 4 },
