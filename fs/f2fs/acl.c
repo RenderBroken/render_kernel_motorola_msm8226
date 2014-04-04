@@ -204,6 +204,12 @@ static int f2fs_set_acl(struct inode *inode, int type,
 	if (S_ISLNK(inode->i_mode))
 		return -EOPNOTSUPP;
 
+	if (acl) {
+		error = posix_acl_valid(acl);
+		if (error < 0)
+			return error;
+	}
+
 	switch (type) {
 	case ACL_TYPE_ACCESS:
 		name_index = F2FS_XATTR_INDEX_POSIX_ACL_ACCESS;
