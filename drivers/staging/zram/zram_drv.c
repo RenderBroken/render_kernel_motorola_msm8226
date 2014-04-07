@@ -2,6 +2,7 @@
  * Compressed RAM block device
  *
  * Copyright (C) 2008, 2009, 2010  Nitin Gupta
+ *               2012, 2013 Minchan Kim
  *
  * This code is released using a dual license strategy: BSD/GPL
  * You can choose the licence that better fits your requirements.
@@ -9,7 +10,6 @@
  * Released under the terms of 3-clause BSD License
  * Released under the terms of GNU General Public License Version 2.0
  *
- * Project home: http://compcache.googlecode.com
  */
 
 #define KMSG_COMPONENT "zram"
@@ -116,7 +116,7 @@ static ssize_t zero_pages_show(struct device *dev,
 {
 	struct zram *zram = dev_to_zram(dev);
 
-	return sprintf(buf, "%u\n", zram->stats.pages_zero);
+	return sprintf(buf, "%llu\n", (u64)atomic64_read(&zram->stats.zero_pages));
 }
 
 static ssize_t orig_data_size_show(struct device *dev,
@@ -125,7 +125,7 @@ static ssize_t orig_data_size_show(struct device *dev,
 	struct zram *zram = dev_to_zram(dev);
 
 	return sprintf(buf, "%llu\n",
-		(u64)(zram->stats.pages_stored) << PAGE_SHIFT);
+		(u64)(atomic64_read(&zram->stats.pages_stored)) << PAGE_SHIFT);
 }
 
 static ssize_t compr_data_size_show(struct device *dev,
@@ -134,7 +134,7 @@ static ssize_t compr_data_size_show(struct device *dev,
 	struct zram *zram = dev_to_zram(dev);
 
 	return sprintf(buf, "%llu\n",
-			(u64)atomic64_read(&zram->stats.compr_size));
+			(u64)atomic64_read(&zram->stats.compr_data_size));
 }
 
 static ssize_t mem_used_total_show(struct device *dev,
@@ -152,6 +152,7 @@ static ssize_t mem_used_total_show(struct device *dev,
 	return sprintf(buf, "%llu\n", val);
 }
 
+/* flag operations needs meta->tb_lock */
 static int zram_test_flag(struct zram_meta *meta, u32 index,
 			enum zram_pageflags flag)
 {
@@ -240,6 +241,8 @@ static struct zram_meta *zram_meta_alloc(u64 disksize)
 		goto free_table;
 	}
 
+	rwlock_init(&meta->tb_lock);
+	mutex_init(&meta->buffer_lock);
 	return meta;
 
 free_table:
@@ -305,15 +308,15 @@ static void zram_free_page(struct zram *zram, size_t index)
 		 */
 		if (zram_test_flag(meta, index, ZRAM_ZERO)) {
 			zram_clear_flag(meta, index, ZRAM_ZERO);
-			zram->stats.pages_zero--;
+			atomic64_dec(&zram->stats.zero_pages);
 		}
 		return;
 	}
 
 	zs_free(meta->mem_pool, handle);
 
-	atomic64_sub(meta->table[index].size, &zram->stats.compr_size);
-	zram->stats.pages_stored--;
+	atomic64_sub(meta->table[index].size, &zram->stats.compr_data_size);
+	atomic64_dec(&zram->stats.pages_stored);
 
 	meta->table[index].handle = 0;
 	meta->table[index].size = 0;
@@ -442,8 +445,7 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 		/* Free memory associated with this sector now. */
 		zram_free_page(zram, index);
 
-		zram->stats.pages_zero++;
-		zram_set_flag(meta, index, ZRAM_ZERO);
+		atomic64_inc(&zram->stats.zero_pages);
 		ret = 0;
 		goto out;
 	}
@@ -509,11 +511,8 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 	meta->table[index].size = clen;
 
 	/* Update stats */
-	atomic64_add(clen, &zram->stats.compr_size);
-	zram->stats.pages_stored++;
-	if (clen <= PAGE_SIZE / 2)
-		zram->stats.good_compress++;
-
+	atomic64_add(clen, &zram->stats.compr_data_size);
+	atomic64_inc(&zram->stats.pages_stored);
 out:
 	if (is_partial_io(bvec))
 		kfree(uncmem);
