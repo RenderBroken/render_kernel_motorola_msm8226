@@ -16,9 +16,9 @@
 #define _ZRAM_DRV_H_
 
 #include <linux/spinlock.h>
-#include <linux/mutex.h>
+#include <linux/zsmalloc.h>
 
-#include "../zsmalloc/zsmalloc.h"
+#include "zcomp.h"
 
 /*
  * Some arbitrary value. This is just to catch
@@ -85,15 +85,9 @@ struct zram_stats {
 };
 
 struct zram_meta {
-	void *compress_workmem;
-	void *compress_buffer;
+	rwlock_t tb_lock;	/* protect table */
 	struct table *table;
 	struct zs_pool *mem_pool;
-};
-
-struct zram_slot_free {
-	unsigned long index;
-	struct zram_slot_free *next;
 };
 
 struct zram {
@@ -107,6 +101,8 @@ struct zram {
 
 	struct request_queue *queue;
 	struct gendisk *disk;
+	struct zcomp *comp;
+
 	/* Prevent concurrent execution of device init, reset and R/W request */
 	struct rw_semaphore init_lock;
 	/*
