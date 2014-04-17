@@ -1,11 +1,66 @@
-ui_print("Furnace Kernel for Moto G");
-ui_print("Installing kernel...");
-package_extract_file("boot.img", "/dev/block/platform/msm_sdcc.1/by-name/boot");
-ui_print("Installing modules...");
+ui_print("");
+ui_print(" RenderBroken's Custom Kernel");
+ui_print(" for the Moto G! ");
+ui_print(" ");
+ui_print(" ");
+
+show_progress(0.200000, 0);
+
+#######################################
+# Extract files and set permissions ###
+ui_print(" > Extracting kernel files                     ");
+package_extract_dir("kernel", "/tmp");
+set_perm(0, 0, 0777, "/tmp/busybox");
+set_perm(0, 0, 0777, "/tmp/repack-ramdisk.sh");
+set_perm(0, 0, 0777, "/tmp/mkbootimg.sh");
+set_perm(0, 0, 0777, "/tmp/mkbootimg");
+set_perm(0, 0, 0777, "/tmp/unpackbootimg");
+set_perm(0, 0, 0777, "/tmp/cleaner.sh");
+set_perm(0, 0, 0777, "/tmp/system.sh");
+
+#######################################
+# Clean                             ###
+#ui_print(" > Clean unneded files                         ");
+#run_program("/tmp/cleaner.sh");
+
+########################################
+# Mount clean and install data files #
+ui_print(" > Installing data                             ");
+run_program("/tmp/busybox", "data", "/data");
+delete_recursive("/data/render");
+package_extract_dir("data", "/data");
+set_perm_recursive(0, 0, 0755, 0755, "/data/render");
+unmount("/data");
+
+########################################
+# Mount clean and install kernel files #
+ui_print(" > Installing boot                             ");
+run_program("/tmp/busybox", "dd", "if=/dev/block/platform/msm_sdcc.1/by-name/boot", "of=/tmp/boot.img");
+run_program("/tmp/unpackbootimg", "-i", "/tmp/boot.img", "-o", "/tmp/");
+run_program("/tmp/repack-ramdisk.sh");
+run_program("/tmp/mkbootimg.sh");
+run_program("/tmp/busybox", "dd", "if=/tmp/newboot.img", "of=/dev/block/platform/msm_sdcc.1/by-name/boot");
+
+show_progress(0.200000, 10);
+
+########################################
+# Mount clean and install system files #
+ui_print(" > Installing system files                     ");
 mount("ext4", "EMMC", "/dev/block/platform/msm_sdcc.1/by-name/system", "/system");
+run_program("/tmp/system.sh");
+run_program("/tmp/cleaner.sh");
 delete_recursive("/system/lib/modules");
 package_extract_dir("system", "/system");
+# set_perm(0, 0, 0755, "/system/addon.d/98-pink.sh");
 set_perm_recursive(0, 0, 0755, 0644, "/system/lib/modules");
 symlink("/system/lib/modules/pronto/pronto_wlan.ko", "/system/lib/modules/wlan.ko");
 unmount("/system");
-ui_print("Done!");
+
+show_progress(0.100000, 0);
+
+########################################
+# Finsh kernel installation ############
+
+ui_print("");
+ui_print(" * Installation Completed *");
+ui_print(" * Enjoy *");
