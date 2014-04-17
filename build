@@ -1,0 +1,129 @@
+#!/bin/bash
+# If you're using my script, all you need to do is edit the following lines to work for you.
+# Final zip will exist in "build" as "furnace-1.0.0-aosp_hammerhead.zip" for example
+# If you are using a non-appended dt.image, you will need to add "--dt path/to/dt.img" and
+# the appropriate lines for dtbTool to compile it, if not prebuilt.
+build=/home/renderbroken/android/source/zips/motog
+kernel="Render-Kernel"
+version="1.0.0"
+rom="AOSP"
+ramdisk=/home/renderbroken/android/source/kernel/msm8226/ramdisk/
+toolchain=/home/renderbroken/android/source/toolchains/arm-cortex_a7-linux-gnueabihf-4.8.3/bin
+toolchain2="arm-cortex_a7-linux-gnueabihf-"
+config="render_defconfig"
+kerneltype="zImage-dtb"
+jobcount="-j8"
+ps=2048
+base=0x00000000
+ramdisk_offset=0x01000000
+tags_offset=0x00000100
+cmdline="console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x37 vmalloc=400M utags.blkdev=/dev/block/platform/msm_sdcc.1/by-name/utags androidboot.write_protect=0 zcache androidboot.selinux=permissive"
+CURRENTDATE=$(date +"%m-%d")
+
+rm -rf /home/renderbroken/android/source/out/motog/*
+mkdir /home/renderbroken/android/source/out/motog/tmp/
+echo "Checking for build..."
+if [ -f ozip/kernel/zImage-dtb ]; then
+	read -p "Previous build found, clean working directory..(y/n)? : " cchoice
+	case "$cchoice" in
+		y|Y )
+			export ARCH=arm
+			export CROSS_COMPILE=$toolchain/"$toolchain2"
+			echo "  CLEAN   ozip"
+			rm -rf ozip/{system}
+			rm -rf ozip/kernel/zImage-dtb
+			rm -rf arch/arm/boot/"$kerneltype"
+			mkdir -p ozip/system/lib/modules
+			make clean && make mrproper
+			echo "Working directory cleaned...";;
+		n|N )
+			echo "Skipping...";;
+	esac
+	read -p "Begin build now..(y/n)? : " dchoice
+	case "$dchoice" in
+		y|Y)
+			make ARCH=arm "$config"
+			make ARCH=arm "$jobcount"
+			exit 0;;
+		n|N )
+			echo "Skipping...";;
+	esac
+fi
+if [ -f arch/arm/boot/"$kerneltype" ]; then
+	cp arch/arm/boot/"$kerneltype" /home/renderbroken/android/source/kernel/msm8226/ozip/kernel
+	rm -rf ozip/system
+	mkdir -p ozip/system/lib/modules
+	find . -name "*.ko" -exec cp {} ozip/system/lib/modules \;
+	if [ -f ozip/system/lib/modules/radio-iris-transport.ko ]; then
+		echo "Modules found!"
+		echo "Doing $variant specific module changes!"
+		if [ -f ozip/system/lib/modules/wlan.ko ]; then
+			mkdir ozip/system/lib/modules/pronto
+			mv ozip/system/lib/modules/wlan.ko ozip/system/lib/modules/pronto/pronto_wlan.ko
+		else
+			echo "wlan.ko not found!"
+		fi
+	else
+		rm -rf ozip/system
+	fi
+else
+	echo "Nothing has been made..."
+	read -p "Clean working directory..(y/n)? : " achoice
+	case "$achoice" in
+		y|Y )
+			export ARCH=arm
+			export CROSS_COMPILE=$toolchain/"$toolchain2"
+			if [ -f arch/arm/boot/"$kerneltype" ]; then
+				echo "  CLEAN   ozip"
+			fi
+#			rm -rf ozip/boot.img
+			rm -rf arch/arm/boot/"$kerneltype"
+			mkdir -p ozip/system/lib/modules
+			make clean && make mrproper
+			echo "Working directory cleaned...";;
+		n|N )
+			echo "Skipping...";;
+	esac
+	read -p "Begin build now..(y/n)? : " bchoice
+	case "$bchoice" in
+		y|Y)
+			export ARCH=arm
+			export CROSS_COMPILE=$toolchain/"$toolchain2"
+			make "$config"
+			make "$jobcount"
+			exit 0;;
+		n|N )
+			echo "Skipping...";;
+	esac
+fi
+
+#echo "Making ramdisk..."
+#if [ -d $ramdisk ]; then
+#	./mkbootfs $ramdisk | gzip > /home/renderbroken/android/source/out/motog/ramdisk.gz
+#else
+#	echo "No ramdisk found..."
+#	exit 0;
+#fi
+
+#echo "Making boot.img..."
+#if [ -f /home/renderbroken/android/source/out/motog/"$kerneltype" ]; then
+#	./mkbootimg --kernel /home/renderbroken/android/source/out/motog/"$kerneltype" --ramdisk /home/renderbroken/android/source/out/motog/ramdisk.gz --cmdline "$cmdline" --base $base --pagesize $ps --ramdisk_offset $ramdisk_offset --tags_offset $tags_offset -o ozip/boot.img
+#else
+#	echo "No $kerneltype found..."
+#	exit 0;
+#fi
+
+echo "Zipping..."
+if [ -f arch/arm/boot/"$kerneltype" ]; then
+	cd ozip
+	zip -r ../"$kernel"-$version-"$rom"-$CURRENTDATE.zip .
+	mv ../"$kernel"-$version-"$rom"-$CURRENTDATE.zip $build
+	cd ..
+	rm -rf /home/renderbroken/android/source/out/motog/*
+	echo "Done..."
+	exit 0;
+else
+	echo "No $kerneltype found..."
+	exit 0;
+fi
+# Export script by Savoca
