@@ -53,7 +53,7 @@ static struct delayed_work intelli_plug_boost;
 static struct workqueue_struct *intelliplug_wq;
 static struct workqueue_struct *intelliplug_boost_wq;
 
-static unsigned int intelli_plug_active = 1;
+static unsigned int intelli_plug_active = 0;
 module_param(intelli_plug_active, uint, 0644);
 
 static unsigned int eco_mode_active = 0;
@@ -327,7 +327,7 @@ static void intelli_plug_suspend(struct power_suspend *handler)
 {
         int i;
         int num_of_active_cores = num_possible_cpus();
-        
+
         flush_workqueue(intelliplug_wq);
 
         mutex_lock(&intelli_plug_mutex);
