@@ -228,7 +228,7 @@ static int msm_cpufreq_verify(struct cpufreq_policy *policy)
 	return 0;
 }
 
-static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
+unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 {
 	if (is_clk && is_sync)
 		cpu = 0;
@@ -236,7 +236,7 @@ static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 	if (is_clk)
 		return clk_get_rate(cpu_clk[cpu]) / 1000;
 
-	return acpuclk_get_rate(cpu);
+	return 0;
 }
 
 static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
@@ -444,7 +444,7 @@ static ssize_t store_max_screen_off(struct cpufreq_policy *policy,
 		const char *buf, size_t count)
 {
 	if (buf[0] >= '0' && buf[0] <= '1' && buf[1] == '\n')
-            if (maxscroff != buf[0] - '0') 
+            if (maxscroff != buf[0] - '0')
 		        maxscroff = buf[0] - '0';
 
 	return count;
