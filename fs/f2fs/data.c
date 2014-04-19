@@ -1051,19 +1051,19 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 		return 0;
 
 #ifdef CONFIG_AIO_OPTIMIZATION
-	if (check_direct_IO(inode, rw, iter, offset))
+	if (rw == WRITE)
 		return 0;
 #else
   	if (check_direct_IO(inode, rw, iov, offset, nr_segs))
-  		return 0;
+		return 0;
 #endif
 
 #ifdef CONFIG_AIO_OPTIMIZATION
 	return blockdev_direct_IO(rw, iocb, inode, iter, offset,
-					get_data_block);
+						  get_data_block);
 #else
   	return blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
-  							get_data_block);
+  						  get_data_block);
 #endif
 }
 
