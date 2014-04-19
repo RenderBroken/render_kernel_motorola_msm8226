@@ -1005,8 +1005,6 @@ static int f2fs_write_end(struct file *file,
 	return copied;
 }
 
-#ifdef CONFIG_AIO_OPTIMIZATION
-#else
 static int check_direct_IO(struct inode *inode, int rw,
 		const struct iovec *iov, loff_t offset, unsigned long nr_segs)
 {
@@ -1024,14 +1022,9 @@ static int check_direct_IO(struct inode *inode, int rw,
 			return -EINVAL;
 	return 0;
 }
-#endif
 
 static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
-#ifdef CONFIG_AIO_OPTIMIZATION
-		struct iov_iter *iter, loff_t offset)
-#else
-  		const struct iovec *iov, loff_t offset, unsigned long nr_segs)
-#endif
+		const struct iovec *iov, loff_t offset, unsigned long nr_segs)
 {
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
@@ -1040,21 +1033,11 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 	if (f2fs_has_inline_data(inode))
 		return 0;
 
-#ifdef CONFIG_AIO_OPTIMIZATION
-	if (rw == WRITE)
+	if (check_direct_IO(inode, rw, iov, offset, nr_segs))
 		return 0;
-#else
-  	if (check_direct_IO(inode, rw, iov, offset, nr_segs))
-		return 0;
-#endif
 
-#ifdef CONFIG_AIO_OPTIMIZATION
-	return blockdev_direct_IO(rw, iocb, inode, iter, offset,
-						  get_data_block);
-#else
-  	return blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
-  						  get_data_block);
-#endif
+	return blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
+							get_data_block);
 }
 
 static void f2fs_invalidate_data_page(struct page *page, unsigned long offset)
