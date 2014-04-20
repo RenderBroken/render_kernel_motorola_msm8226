@@ -64,5 +64,17 @@ sed -i '/\/sys\/devices\/system\/cpu\/cpu1\/cpufreq\/scaling_governor/d' init.qc
 sed -i '/\/sys\/devices\/system\/cpu\/cpu2\/cpufreq\/scaling_governor/d' init.qcom.rc
 sed -i '/\/sys\/devices\/system\/cpu\/cpu3\/cpufreq\/scaling_governor/d' init.qcom.rc
 
+#remove min_freq overrides, use kernel default
+sed -i '/\/sys\/devices\/system\/cpu\/cpu0\/cpufreq\/scaling_min_freq/d' init.qcom.rc
+sed -i '/\/sys\/devices\/system\/cpu\/cpu1\/cpufreq\/scaling_min_freq/d' init.qcom.rc
+sed -i '/\/sys\/devices\/system\/cpu\/cpu2\/cpufreq\/scaling_min_freq/d' init.qcom.rc
+sed -i '/\/sys\/devices\/system\/cpu\/cpu3\/cpufreq\/scaling_min_freq/d' init.qcom.rc
+
+#remove ondemand tuneable overrides, use better ones
+sed -i 's/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/down_differential\ 10/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/down_differential\ 3/g' init.qcom.rc
+sed -i 's/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/up_threshold_multi_core\ 60/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/up_threshold_multi_core\ 80/g' init.qcom.rc
+sed -i 's/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/optimal_freq\ 918000/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/optimal_freq\ 384000/g' init.qcom.rc
+sed -i 's/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/sync_freq\ 1026000/write\ \/sys\/devices\/system\/cpu\/cpufreq\/ondemand\/sync_freq\ 384000/g' init.qcom.rc
+
 find . | cpio -o -H newc | gzip > ../newramdisk.cpio.gz
 cd /
