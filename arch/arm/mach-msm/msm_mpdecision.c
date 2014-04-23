@@ -46,7 +46,7 @@
 #endif
 #include "acpuclock.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 DEFINE_PER_CPU(struct msm_mpdec_cpudata_t, msm_mpdec_cpudata);
 EXPORT_PER_CPU_SYMBOL_GPL(msm_mpdec_cpudata);
