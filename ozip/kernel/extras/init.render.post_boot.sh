@@ -58,7 +58,7 @@ echo 1 > /sys/kernel/msm_mpdecision/conf/enabled
 ############################
 # Disable Faux's Intelliplug
 #
-echo 0 > /sys/module/intelli_plug_parameters/intelli_plug_active
+#echo 0 > /sys/module/intelli_plug_parameters/intelli_plug_active
 
 ############################
 # mount debugfs
