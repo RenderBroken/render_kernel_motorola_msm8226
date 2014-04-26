@@ -32,7 +32,7 @@
 #include <asm/ioctls.h>
 
 #ifndef CONFIG_LOGCAT_SIZE
-#define CONFIG_LOGCAT_SIZE 256
+#define CONFIG_LOGCAT_SIZE 32
 #endif
 
 static DEFINE_SPINLOCK(log_lock);
