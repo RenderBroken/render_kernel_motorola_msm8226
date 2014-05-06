@@ -23,7 +23,7 @@ CURRENTDATE=$(date +"%m-%d")
 rm -rf /home/renderbroken/android/source/out/motog/*
 mkdir /home/renderbroken/android/source/out/motog/tmp/
 echo "Checking for build..."
-if [ -f ozip/kernel/zImage-dtb ]; then
+if [ -f ozip/boot.img ]; then
 	read -p "Previous build found, clean working directory..(y/n)? : " cchoice
 	case "$cchoice" in
 		y|Y )
@@ -31,7 +31,7 @@ if [ -f ozip/kernel/zImage-dtb ]; then
 			export CROSS_COMPILE=$toolchain/"$toolchain2"
 			echo "  CLEAN   ozip"
 			rm -rf ozip/{system}
-			rm -rf ozip/kernel/zImage-dtb
+			rm -rf ozip/boot.img
 			rm -rf arch/arm/boot/"$kerneltype"
 			mkdir -p ozip/system/lib/modules
 			make clean && make mrproper
@@ -50,8 +50,8 @@ if [ -f ozip/kernel/zImage-dtb ]; then
 	esac
 fi
 if [ -f arch/arm/boot/"$kerneltype" ]; then
-	cp arch/arm/boot/"$kerneltype" /home/renderbroken/android/source/kernel/msm8226/ozip/kernel
-	rm -rf ozip/system
+	cp arch/arm/boot/"$kerneltype" /home/renderbroken/android/source/out/motog
+	rm -rf ozip/system/*
 	mkdir -p ozip/system/lib/modules
 	find . -name "*.ko" -exec cp {} ozip/system/lib/modules \;
 	if [ -f ozip/system/lib/modules/radio-iris-transport.ko ]; then
@@ -76,7 +76,7 @@ else
 			if [ -f arch/arm/boot/"$kerneltype" ]; then
 				echo "  CLEAN   ozip"
 			fi
-#			rm -rf ozip/boot.img
+			rm -rf ozip/boot.img
 			rm -rf arch/arm/boot/"$kerneltype"
 			mkdir -p ozip/system/lib/modules
 			make clean && make mrproper
@@ -97,21 +97,21 @@ else
 	esac
 fi
 
-#echo "Making ramdisk..."
-#if [ -d $ramdisk ]; then
-#	./mkbootfs $ramdisk | gzip > /home/renderbroken/android/source/out/motog/ramdisk.gz
-#else
-#	echo "No ramdisk found..."
-#	exit 0;
-#fi
+echo "Making ramdisk..."
+if [ -d $ramdisk ]; then
+	./mkbootfs $ramdisk | gzip > /home/renderbroken/android/source/out/motog/ramdisk.gz
+else
+	echo "No ramdisk found..."
+	exit 0;
+fi
 
-#echo "Making boot.img..."
-#if [ -f /home/renderbroken/android/source/out/motog/"$kerneltype" ]; then
-#	./mkbootimg --kernel /home/renderbroken/android/source/out/motog/"$kerneltype" --ramdisk /home/renderbroken/android/source/out/motog/ramdisk.gz --cmdline "$cmdline" --base $base --pagesize $ps --ramdisk_offset $ramdisk_offset --tags_offset $tags_offset -o ozip/boot.img
-#else
-#	echo "No $kerneltype found..."
-#	exit 0;
-#fi
+echo "Making boot.img..."
+if [ -f /home/renderbroken/android/source/out/motog/"$kerneltype" ]; then
+	./mkbootimg --kernel /home/renderbroken/android/source/out/motog/"$kerneltype" --ramdisk /home/renderbroken/android/source/out/motog/ramdisk.gz --cmdline "$cmdline" --base $base --pagesize $ps --ramdisk_offset $ramdisk_offset --tags_offset $tags_offset -o ozip/boot.img
+else
+	echo "No $kerneltype found..."
+	exit 0;
+fi
 
 echo "Zipping..."
 if [ -f arch/arm/boot/"$kerneltype" ]; then
