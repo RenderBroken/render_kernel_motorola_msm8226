@@ -284,7 +284,7 @@ static void msm_mpdec_work_thread(struct work_struct *work) {
 		break;
 	case MSM_MPDEC_DOWN:
 		cpu = get_slowest_cpu();
-		if (cpu < nr_cpu_ids) {
+		if (cpu < nr_cpu_ids && cpu > 1) {
 			if ((per_cpu(msm_mpdec_cpudata, cpu).online == true) && (cpu_online(cpu))) {
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 				unboost_cpu(cpu);
@@ -550,7 +550,7 @@ static void msm_mpdec_suspend(struct work_struct * msm_mpdec_suspend_work) {
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 		unboost_cpu(cpu);
 #endif
-		if ((cpu >= 1) && (cpu_online(cpu))) {
+		if ((cpu > 1) && (cpu_online(cpu))) {
 			mpdec_cpu_down(cpu);
 		}
 	}
@@ -630,7 +630,7 @@ static void msm_mpdec_power_resume(struct power_suspend *h) {
 	mutex_lock(&mpdec_msm_susres_lock);
 	schedule_work(&msm_mpdec_resume_work);
 	mutex_unlock(&mpdec_msm_susres_lock);
-}
+};
 
 static struct power_suspend msm_mpdec_power_suspend_info = {
 	.suspend = msm_mpdec_power_suspend,
