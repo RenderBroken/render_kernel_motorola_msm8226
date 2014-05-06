@@ -4,62 +4,46 @@ ui_print(" for the Moto G! ");
 ui_print(" ");
 ui_print(" ");
 
-show_progress(0.200000, 0);
+ifelse(is_mounted("/system") == "/system", unmount("/system"));
+ifelse(is_mounted("/cache") == "/cache", unmount("/cache"));
+set_progress(0.2);
 
-#######################################
-# Extract files and set permissions ###
+################Extract Files and Set Permissions
 ui_print(" > Extracting kernel files                     ");
 package_extract_dir("kernel", "/tmp");
 set_perm(0, 0, 0777, "/tmp/busybox");
-set_perm(0, 0, 0777, "/tmp/repack-ramdisk.sh");
-set_perm(0, 0, 0777, "/tmp/mkbootimg.sh");
-set_perm(0, 0, 0777, "/tmp/mkbootimg");
-set_perm(0, 0, 0777, "/tmp/unpackbootimg");
-set_perm(0, 0, 0777, "/tmp/cleaner.sh");
-set_perm(0, 0, 0777, "/tmp/system.sh");
+set_perm(0, 0, 0777, "/tmp/compatibility.sh");
+set_progress(0.4);
 
-#######################################
-# Clean                             ###
-#ui_print(" > Clean unneded files                         ");
-#run_program("/tmp/cleaner.sh");
-
-########################################
-# Mount clean and install data files #
-ui_print(" > Installing data                             ");
-run_program("/tmp/busybox", "data", "/data");
-delete_recursive("/data/render");
-package_extract_dir("data", "/data");
-set_perm_recursive(0, 0, 0755, 0755, "/data/render");
-unmount("/data");
-
-########################################
-# Mount clean and install kernel files #
-ui_print(" > Installing boot                             ");
-run_program("/tmp/busybox", "dd", "if=/dev/block/platform/msm_sdcc.1/by-name/boot", "of=/tmp/boot.img");
-run_program("/tmp/unpackbootimg", "-i", "/tmp/boot.img", "-o", "/tmp/");
-run_program("/tmp/repack-ramdisk.sh");
-run_program("/tmp/mkbootimg.sh");
-run_program("/tmp/busybox", "dd", "if=/tmp/newboot.img", "of=/dev/block/platform/msm_sdcc.1/by-name/boot");
-
-show_progress(0.200000, 10);
-
-########################################
-# Mount clean and install system files #
-ui_print(" > Installing system files                     ");
+################Mount System
+ui_print(" > Mount /system...");
 mount("ext4", "EMMC", "/dev/block/platform/msm_sdcc.1/by-name/system", "/system");
-run_program("/tmp/system.sh");
-run_program("/tmp/cleaner.sh");
+set_progress(0.6);
+
+################Clean
+ui_print(" > Clean unneded files and make compatible     ");
+run_program("/tmp/busybox", "dd", "if=/dev/block/platform/msm_sdcc.1/by-name/boot", "of=/tmp/boot.img");
+run_program("/tmp/compatibility.sh");
+set_progress(0.8);
+
+################Mount clean and install kernel files
+ui_print(" > Installing boot.img                         ");
+package_extract_file("boot.img", "/dev/block/platform/msm_sdcc.1/by-name/boot");
+ui_print(" > Installing modules...");
+mount("ext4", "EMMC", "/dev/block/platform/msm_sdcc.1/by-name/system", "/system");
 delete_recursive("/system/lib/modules");
 package_extract_dir("system", "/system");
-# set_perm(0, 0, 0755, "/system/addon.d/98-pink.sh");
 set_perm_recursive(0, 0, 0755, 0644, "/system/lib/modules");
 symlink("/system/lib/modules/pronto/pronto_wlan.ko", "/system/lib/modules/wlan.ko");
 unmount("/system");
+set_progress(0.9);
 
-show_progress(0.100000, 0);
-
-########################################
-# Finsh kernel installation ############
+################WIPE CACHE
+ui_print(" > Wiping /cache");
+run_program("/sbin/busybox", "mount", "/cache");
+delete_recursive("/cache/");
+run_program("/sbin/busybox", "umount", "/cache");
+set_progress(1.0);
 
 ui_print("");
 ui_print(" * Installation Completed *");
