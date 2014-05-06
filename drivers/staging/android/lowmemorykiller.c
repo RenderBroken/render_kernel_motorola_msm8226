@@ -43,7 +43,6 @@
 #include <linux/delay.h>
 #include <linux/swap.h>
 #include <linux/fs.h>
-#include <linux/powersuspend.h>
 
 #include <trace/events/memkill.h>
 
@@ -54,41 +53,20 @@
 #endif
 
 static uint32_t lowmem_debug_level = 1;
-static uint32_t lowmem_auto_oom = 1;
-static short lowmem_adj[6] = {
+static int lowmem_adj[6] = {
 	0,
 	1,
 	6,
 	12,
-	13,
-	15,
 };
-static int lowmem_adj_size = 6;
+static int lowmem_adj_size = 4;
 static int lowmem_minfree[6] = {
 	3 * 512,	/* 6MB */
 	2 * 1024,	/* 8MB */
 	4 * 1024,	/* 16MB */
 	16 * 1024,	/* 64MB */
-	20 * 1024,	/* 80MB */
-	28 * 1024,	/* 112MB */
 };
-static int lowmem_minfree_screen_off[6] = {
-	3 * 512,	/* 6MB */
-	2 * 1024,	/* 8MB */
-	4 * 1024,	/* 16MB */
-	16 * 1024,	/* 64MB */
-	20 * 1024,	/* 80MB */
-	28 * 1024,	/* 112MB */
-};
-static int lowmem_minfree_screen_on[6] = {
-	3 * 512,	/* 6MB */
-	2 * 1024,	/* 8MB */
-	4 * 1024,	/* 16MB */
-	16 * 1024,	/* 64MB */
-	20 * 1024,	/* 80MB */
-	28 * 1024,	/* 112MB */
-};
-static int lowmem_minfree_size = 6;
+static int lowmem_minfree_size = 4;
 static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
@@ -101,16 +79,16 @@ static unsigned long lowmem_deathpending_timeout;
 
 static int test_task_flag(struct task_struct *p, int flag)
 {
-	struct task_struct *t;
+	struct task_struct *t = p;
 
-	for_each_thread(p,t) {
+	do {
 		task_lock(t);
 		if (test_tsk_thread_flag(t, flag)) {
 			task_unlock(t);
 			return 1;
 		}
 		task_unlock(t);
-	}
+	} while_each_thread(p, t);
 
 	return 0;
 }
@@ -207,35 +185,6 @@ void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
 	}
 }
 
-#ifdef CONFIG_HIGHMEM
-void adjust_gfp_mask(gfp_t *gfp_mask)
-{
-	struct zone *preferred_zone;
-	struct zonelist *zonelist;
-	enum zone_type high_zoneidx;
-
-	if (current_is_kswapd()) {
-		zonelist = node_zonelist(0, *gfp_mask);
-		high_zoneidx = gfp_zone(*gfp_mask);
-		first_zones_zonelist(zonelist, high_zoneidx, NULL,
-				&preferred_zone);
-
-		if (high_zoneidx == ZONE_NORMAL) {
-			if (zone_watermark_ok_safe(preferred_zone, 0,
-					high_wmark_pages(preferred_zone), 0,
-					0))
-				*gfp_mask |= __GFP_HIGHMEM;
-		} else if (high_zoneidx == ZONE_HIGHMEM) {
-			*gfp_mask |= __GFP_HIGHMEM;
-		}
-	}
-}
-#else
-void adjust_gfp_mask(gfp_t *unused)
-{
-}
-#endif
-
 void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc,
 				struct zone_avail zall[][MAX_NR_ZONES])
 {
@@ -248,8 +197,6 @@ void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc,
 	struct zone_avail *za;
 
 	gfp_mask = sc->gfp_mask;
-	adjust_gfp_mask(&gfp_mask);
-
 	zonelist = node_zonelist(0, gfp_mask);
 	high_zoneidx = gfp_zone(gfp_mask);
 	first_zones_zonelist(zonelist, high_zoneidx, NULL, &preferred_zone);
@@ -533,28 +480,8 @@ static struct notifier_block tsk_migration_nb = {
 };
 #endif
 
-static void low_mem_power_suspend(struct power_suspend *handler)
-{
-	if (lowmem_auto_oom) {
-		memcpy(lowmem_minfree_screen_on, lowmem_minfree, sizeof(lowmem_minfree));
-		memcpy(lowmem_minfree, lowmem_minfree_screen_off, sizeof(lowmem_minfree_screen_off));
-	}
-}
-
-static void low_mem_late_resume(struct power_suspend *handler)
-{
-	if (lowmem_auto_oom)
-		memcpy(lowmem_minfree, lowmem_minfree_screen_on, sizeof(lowmem_minfree_screen_on));
-}
-
-static struct power_suspend low_mem_suspend = {
-	.suspend = low_mem_power_suspend,
-	.resume = low_mem_late_resume,
-};
-
 static int __init lowmem_init(void)
 {
-	register_power_suspend(&low_mem_suspend);
 	register_shrinker(&lowmem_shrinker);
 #ifdef CONFIG_ANDROID_BG_SCAN_MEM
 	raw_notifier_chain_register(&bgtsk_migration_notifier_head,
@@ -733,7 +660,7 @@ module_param_named(cost, lowmem_shrinker.seeks, int, S_IRUGO | S_IWUSR);
 __module_param_call(MODULE_PARAM_PREFIX, adj,
 		    &lowmem_adj_array_ops,
 		    .arr = &__param_arr_adj,
-		    S_IRUGO | S_IWUSR, 0664);
+		    S_IRUGO | S_IWUSR, -1);
 __MODULE_PARM_TYPE(adj, "array of int");
 #else
 module_param_array_named(adj, lowmem_adj, int, &lowmem_adj_size,
@@ -741,10 +668,7 @@ module_param_array_named(adj, lowmem_adj, int, &lowmem_adj_size,
 #endif
 module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
 			 S_IRUGO | S_IWUSR);
-module_param_array_named(minfree_screen_off, lowmem_minfree_screen_off, uint, &lowmem_minfree_size,
-			 S_IRUGO | S_IWUSR);
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
-module_param_named(auto_oom, lowmem_auto_oom, uint, S_IRUGO | S_IWUSR);
 module_param_named(lmk_fast_run, lmk_fast_run, int, S_IRUGO | S_IWUSR);
 
 module_init(lowmem_init);
