@@ -24,10 +24,10 @@
  */
 
 #include "msm_mpdecision.h"
-#ifndef CONFIG_POWERSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 #include <linux/lcd_notify.h>
 #else
-#include <linux/powersuspend.h>
+#include <linux/earlysuspend.h>
 #endif
 #include <linux/init.h>
 #include <linux/cpufreq.h>
@@ -38,7 +38,6 @@
 #include <asm-generic/cputime.h>
 #include <linux/hrtimer.h>
 #include <linux/delay.h>
-#include <linux/rq_stats.h>
 #include <linux/export.h>
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 #include <linux/input.h>
@@ -52,7 +51,7 @@ DEFINE_PER_CPU(struct msm_mpdec_cpudata_t, msm_mpdec_cpudata);
 EXPORT_PER_CPU_SYMBOL_GPL(msm_mpdec_cpudata);
 
 static bool mpdec_suspended = false;
-#ifndef CONFIG_POWERSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 static struct notifier_block msm_mpdec_lcd_notif;
 #endif
 static struct delayed_work msm_mpdec_work;
@@ -86,7 +85,7 @@ static struct msm_mpdec_tuners {
 	.scroff_single_core = true,
 	.idle_freq = MSM_MPDEC_IDLE_FREQ,
 	.max_cpus = CONFIG_NR_CPUS,
-	.min_cpus = 2,
+	.min_cpus = 1,
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 	.boost_enabled = true,
 	.boost_time = MSM_MPDEC_BOOSTTIME,
@@ -99,11 +98,11 @@ static struct msm_mpdec_tuners {
 #endif
 };
 
-static unsigned int NwNs_Threshold[8] = { 12,  0,  20,  7,  25,  10, 0,   18};
-static unsigned int TwTs_Threshold[8] = {140,  0, 140, 190, 140, 190, 0, 190};
+static unsigned int NwNs_Threshold[8] = {12, 0, 20, 7, 25, 10, 0, 18};
+static unsigned int TwTs_Threshold[8] = {140, 0, 140, 190, 140, 190, 0, 190};
 
 extern unsigned int get_rq_info(void);
-extern unsigned long acpuclk_get_rate(int cpu);
+extern unsigned long acpuclk_get_rate(int);
 
 unsigned int state = MSM_MPDEC_IDLE;
 bool was_paused = false;
@@ -161,7 +160,7 @@ static unsigned long get_slowest_cpu_rate(void) {
 	return slow_rate;
 }
 
-static void __ref mpdec_cpu_up(int cpu) {
+static void mpdec_cpu_up(int cpu) {
 	if (!cpu_online(cpu)) {
 		mutex_lock(&per_cpu(msm_mpdec_cpudata, cpu).hotplug_mutex);
 		cpu_up(cpu);
@@ -214,7 +213,7 @@ static int mp_decision(void) {
 	}
 	total_time += this_time;
 
-	rq_depth = rq_info.rq_avg;
+	rq_depth = get_rq_info();
 	nr_cpu_online = num_online_cpus();
 
 	if (nr_cpu_online) {
@@ -247,8 +246,8 @@ static int mp_decision(void) {
 
 	last_time = ktime_to_ms(ktime_get());
 #if DEBUG
-	pr_info(MPDEC_TAG"[DEBUG] rq: %u, new_state: %i, ifreq: %lu | Mask=[%d%d%d%d]\n",
-			rq_depth, new_state, get_rate(0), cpu_online(0), cpu_online(1), cpu_online(2), cpu_online(3));
+	pr_info(MPDEC_TAG"[DEBUG] rq: %u, new_state: %i | Mask=[%d%d%d%d]\n",
+			rq_depth, new_state, cpu_online(0), cpu_online(1), cpu_online(2), cpu_online(3));
 #endif
 	return new_state;
 }
@@ -284,7 +283,7 @@ static void msm_mpdec_work_thread(struct work_struct *work) {
 		break;
 	case MSM_MPDEC_DOWN:
 		cpu = get_slowest_cpu();
-		if (cpu < nr_cpu_ids && cpu > 1) {
+		if (cpu < nr_cpu_ids) {
 			if ((per_cpu(msm_mpdec_cpudata, cpu).online == true) && (cpu_online(cpu))) {
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 				unboost_cpu(cpu);
@@ -550,7 +549,7 @@ static void msm_mpdec_suspend(struct work_struct * msm_mpdec_suspend_work) {
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN
 		unboost_cpu(cpu);
 #endif
-		if ((cpu > 1) && (cpu_online(cpu))) {
+		if ((cpu >= 1) && (cpu_online(cpu))) {
 			mpdec_cpu_down(cpu);
 		}
 	}
@@ -593,7 +592,7 @@ static void msm_mpdec_resume(struct work_struct * msm_mpdec_suspend_work) {
 }
 static DECLARE_WORK(msm_mpdec_resume_work, msm_mpdec_resume);
 
-#ifndef CONFIG_POWERSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 static int msm_mpdec_lcd_notifier_callback(struct notifier_block *this,
 				unsigned long event, void *data) {
 	pr_debug("%s: event = %lu\n", __func__, event);
@@ -620,21 +619,22 @@ static int msm_mpdec_lcd_notifier_callback(struct notifier_block *this,
 	return 0;
 }
 #else
-static void msm_mpdec_power_suspend(struct power_suspend *h) {
+static void msm_mpdec_early_suspend(struct early_suspend *h) {
 	mutex_lock(&mpdec_msm_susres_lock);
 	schedule_work(&msm_mpdec_suspend_work);
 	mutex_unlock(&mpdec_msm_susres_lock);
 }
 
-static void msm_mpdec_power_resume(struct power_suspend *h) {
+static void msm_mpdec_late_resume(struct early_suspend *h) {
 	mutex_lock(&mpdec_msm_susres_lock);
 	schedule_work(&msm_mpdec_resume_work);
 	mutex_unlock(&mpdec_msm_susres_lock);
-};
+}
 
-static struct power_suspend msm_mpdec_power_suspend_info = {
-	.suspend = msm_mpdec_power_suspend,
-	.resume = msm_mpdec_power_resume,
+static struct early_suspend msm_mpdec_early_suspend_handler = {
+	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
+	.suspend = msm_mpdec_early_suspend,
+	.resume = msm_mpdec_late_resume,
 };
 #endif
 
@@ -1198,7 +1198,7 @@ static int __init msm_mpdec_init(void) {
 	pr_info(MPDEC_TAG"%s init complete.", __func__);
 
 
-#ifndef CONFIG_POWERSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 	msm_mpdec_lcd_notif.notifier_call = msm_mpdec_lcd_notifier_callback;
 	if (lcd_register_client(&msm_mpdec_lcd_notif) != 0) {
 		pr_err("%s: Failed to register lcd callback\n", __func__);
@@ -1206,7 +1206,7 @@ static int __init msm_mpdec_init(void) {
 		lcd_unregister_client(&msm_mpdec_lcd_notif);
 	}
 #else
-	register_power_suspend(&msm_mpdec_power_suspend_info);
+	register_early_suspend(&msm_mpdec_early_suspend_handler);
 #endif
 
 	return err;
@@ -1214,7 +1214,7 @@ static int __init msm_mpdec_init(void) {
 late_initcall(msm_mpdec_init);
 
 void msm_mpdec_exit(void) {
-#ifndef CONFIG_POWERSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 	lcd_unregister_client(&msm_mpdec_lcd_notif);
 #endif
 #ifdef CONFIG_MSM_MPDEC_INPUTBOOST_CPUMIN

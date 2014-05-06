@@ -53,29 +53,6 @@ ssize_t pm_show_wakelocks(char *buf, bool show_active)
 	return (str - buf);
 }
 
-#if CONFIG_PM_WAKELOCKS_LIMIT > 0
-static unsigned int number_of_wakelocks;
-
-static inline bool wakelocks_limit_exceeded(void)
-{
-	return number_of_wakelocks > CONFIG_PM_WAKELOCKS_LIMIT;
-}
-
-static inline void increment_wakelocks_number(void)
-{
-	number_of_wakelocks++;
-}
-
-static inline void decrement_wakelocks_number(void)
-{
-	number_of_wakelocks--;
-}
-#else /* CONFIG_PM_WAKELOCKS_LIMIT = 0 */
-static inline bool wakelocks_limit_exceeded(void) { return false; }
-static inline void increment_wakelocks_number(void) {}
-static inline void decrement_wakelocks_number(void) {}
-#endif /* CONFIG_PM_WAKELOCKS_LIMIT */
-
 #ifdef CONFIG_PM_WAKELOCKS_GC
 #define WL_GC_COUNT_MAX	100
 #define WL_GC_TIME_SEC	300
@@ -158,9 +135,6 @@ static struct wakelock *wakelock_lookup_add(const char *name, size_t len,
 	if (!add_if_not_found)
 		return ERR_PTR(-EINVAL);
 
-	if (wakelocks_limit_exceeded())
-		return ERR_PTR(-ENOSPC);
-
 	/* Not found, we have to add a new one. */
 	wl = kzalloc(sizeof(*wl), GFP_KERNEL);
 	if (!wl)
@@ -176,7 +150,6 @@ static struct wakelock *wakelock_lookup_add(const char *name, size_t len,
 	rb_link_node(&wl->node, parent, node);
 	rb_insert_color(&wl->node, &wakelocks_tree);
 	wakelocks_lru_add(wl);
-	increment_wakelocks_number();
 	return wl;
 }
 

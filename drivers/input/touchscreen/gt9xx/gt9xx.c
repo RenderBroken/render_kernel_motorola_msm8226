@@ -2515,7 +2515,7 @@ static struct of_device_id goodix_match_table[] = {
 static struct i2c_driver goodix_ts_driver = {
 	.probe      = goodix_ts_probe,
 	.remove     = goodix_ts_remove,
-#ifdef CONFIG_HAS_EARLYSUSPEND
+#ifndef CONFIG_HAS_EARLYSUSPEND
 	.suspend    = goodix_ts_early_suspend,
 	.resume     = goodix_ts_late_resume,
 #endif
