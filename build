@@ -3,7 +3,7 @@
 # Final zip will exist in "build" as "furnace-1.0.0-aosp_hammerhead.zip" for example
 # If you are using a non-appended dt.image, you will need to add "--dt path/to/dt.img" and
 # the appropriate lines for dtbTool to compile it, if not prebuilt.
-build=/home/renderbroken/android/source/zips/motog
+build=/home/renderbroken/android/source/zips/msm8226/
 kernel="Render-Kernel"
 version="1.0.0"
 rom="AOSP"
