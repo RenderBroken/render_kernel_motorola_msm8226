@@ -45,7 +45,7 @@ echo 1 > /sys/module/msm_pm/modes/cpu0/power_collapse/idle_enabled
 echo 1 > /sys/devices/system/cpu/cpu1/online
 echo 1 > /sys/devices/system/cpu/cpu2/online
 echo 1 > /sys/devices/system/cpu/cpu3/online
-echo 1 > /sys/kernel/power_suspend/power_suspend_mode
+echo 0 > /sys/kernel/power_suspend/power_suspend_mode
 chmod 664 /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
 chown -h system /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
 chown -h system /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
